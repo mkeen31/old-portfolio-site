@@ -1,0 +1,510 @@
+/* CS410 Final Project Code */
+
+/* connect.php */
+<?php
+$serverName = "localHost";
+$user = "mjkeen";
+$password = "changeme";
+$dbName = "cs410_mjkeen";
+
+try {
+    $pdo = new PDO("mysql:host=$serverName; dbname=$dbName", $user, $password);
+    $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+} catch (PDOException $e){
+    echo "Error: " . $e->getMessage();
+}
+?>
+
+/*End of connect.php*/
+
+
+
+
+/* developer.php */
+<?php
+if(!isset($_SESSION)){
+    session_start();
+}
+include_once 'connect.php';
+$error = array();
+if(!($_SESSION['userid'])){
+    header('Location: login.php');
+}
+if($_SESSION['type'] != 'Developer'){
+    unset($_SESSION['userid']);
+	header('Location: login.php');
+}
+$userid = $_SESSION['userid'];
+$name = $_SESSION['name'];
+$fixed = false;
+$showdescription = false;
+$bugsquery = "SELECT * FROM Bugs WHERE AssignedTo = :userid AND Status = 'Assigned'";
+$bugsql = $pdo->prepare($bugsquery);
+$bugsql->bindValue("userid", $userid);
+$bugsql->execute();
+$bugs = $bugsql->fetchAll();
+if($_POST){
+    if($_POST['fixbug']){
+        if($_POST['changes']){
+            $selectedIndex = $_POST['bug'];
+            $selectedBug = $bugs[$selectedIndex];
+            $fixedquery = "UPDATE Bugs SET Changes = :changes, Status = 'Completed' WHERE BugId = :bugid";
+            $fixedsql = $pdo->prepare($fixedquery);
+            $fixedsql->bindValue("changes", $_POST['changes']);
+            $fixedsql->bindValue("bugid", $selectedBug['BugId']);
+            $fixedsql->execute();
+            $fixed = true;
+            $_POST = array();
+        }
+    }else if($_POST['description']){
+        $showdescription = true;
+    }
+}
+?>
+
+<html>
+<head>
+<title> BSU BMS - Developer Portal</title>
+<style>
+.error {
+    color:red;
+} 
+
+h2 {
+    margin-top:-13px;
+}
+
+table {
+    border: 1px solid black;
+}
+
+td {
+    border: 1px solid black;
+    text-align:center;
+}
+
+#description {
+    height:100;
+    width:170;
+}
+</style>
+<body>
+
+<h1>BSU Bug Management System</h1>
+<h2>Developer Portal</h2>
+
+<?php echo "Welcome, $name!<br><br>";
+
+echo "<h3>Fix assigned bugs</h3>";
+
+if($bugs){
+    echo "<label>Bugs: </label><br><br>";
+    echo "<form action=\"\" method=\"post\">";
+    echo "<select name=\"bug\">";
+    $arrayIndex = 0;
+    foreach($bugs as $bug){
+        $bugid = $bug['BugId'];
+        echo "<option value=\"$arrayIndex\">Bug ID: $bugid</option>";
+        $arrayIndex++;
+    }
+    echo "</select><br><br>";
+    echo "<input type=\"submit\" value=\"Show Description\" name=\"description\"><br><br>";
+
+    if($showdescription){
+        $selectedIndex = $_POST['bug'];
+        $selectedBug = $bugs[$selectedIndex];
+        echo "<table cellpadding=\"5\">";
+        echo "<tr><th>Bug ID</th><th>Tester User ID</th><th>Subject</th><th>Priority</th><th>Description</th></tr>";
+        echo "<tr><td>".$selectedBug['BugId']."</td><td>".$selectedBug['EnteredBy']."</td><td>".$selectedBug['Subject']."</td><td>".$selectedBug['Priority']."</td><td id=\"description\">".$selectedBug['Description']."</td></tr>";
+        echo "</table><br><br>";
+    }
+
+    echo "<label>Changes: </label><br><br>";
+    echo "<textarea name=\"changes\" rows=\"4\" cols=\"50\"></textarea><br><br>";
+    echo "<input type=\"submit\" value=\"Fix Bug\" name=\"fixbug\"><br><br>";
+    echo "</form>";
+}else{
+    echo "<p class=\"error\">You have no bugs assigned to you right now</p>";
+}
+
+if($fixed){
+    echo "<p>Changes were successfully submitted!</p>";
+}
+?>
+
+<p><a href="logout.php">Logout</a></p>
+</body>
+</head>
+</html>
+
+/* End of developer.php */
+
+
+
+/*login.php*/
+
+<?php
+if(!isset($_SESSION)){
+    session_start();
+}
+include_once 'connect.php';
+$error = array();
+if($_POST){
+    if($_POST['login'] && $_POST['username'] && $_POST['password']){
+        $username = trim($_POST['username']);
+        $password = trim($_POST['password']);
+        $query = "SELECT UserId, Password, Type, Name FROM Users WHERE Login=:login";
+        $sql = $pdo->prepare($query);
+        $sql->bindValue("login", $username);
+        $sql->execute();
+        $user = $sql->fetchAll();
+
+        if($user){
+            $type = $user[0]['Type'];
+            if($user[0]['Password'] == sha1($password)){
+                $_SESSION['userid'] = $user[0]['UserId'];
+                $_SESSION['type'] = $type;
+                $_SESSION['name'] = $user[0]['Name'];
+                if($type == 'Manager'){
+                    header('Location: manager.php');
+                }else if($type == 'Developer'){
+                    header('Location: developer.php');
+                }else if($type == 'Tester'){
+                    header('Location: tester.php');
+                }else{
+                    $error[] = "Internal server error, please try again later";
+                }
+            }else{
+                $error[] = "Invalid username or password";
+            }
+        }else{
+            $error[] = "Invalid username or password";
+        }
+    }else{
+        $error[] = "Please fill out all fields";
+    }
+}
+
+?>
+<html>
+<head>
+<title>BSU BMS - Login</title>
+<style>.error {color:red;} h2 {margin-top:-10px;}</style>
+</head>
+<body>
+
+<h1>BSU Bug Management System</h1>
+<h2>Login</h2>
+
+<p>Please enter your credentials below to login:</p><br>
+
+<form action="" method="post">
+    <label>Username: </label>
+    <input type="text" name="username"><br><br>
+
+    <label>Password: </label>
+    <input type="password" name="password"><br><br><br>
+
+    <input type="submit" name="login" value="Login"><br>
+    <span class="error"><?php if($error){ foreach($error as $e){echo "<p>Error: ".$e."</p>";}} ?></span>
+</form>
+
+</body>
+</html>
+/* End of login.php*/
+
+
+
+
+/*logout.php*/
+<?php
+session_start();
+unset($_SESSION['userid']);
+header('Location: login.php');
+?>
+/*End of logout.php*/
+
+
+
+
+/*manager.php*/
+<?php
+if(!isset($_SESSION)){
+    session_start();
+}
+include_once 'connect.php';
+$error = array();
+if(!($_SESSION['userid'])){
+    header('Location: login.php');
+}
+if($_SESSION['type'] != 'Manager'){
+    unset($_SESSION['userid']);
+	header('Location: login.php');
+}
+$userid = $_SESSION['userid'];
+$name = $_SESSION['name'];
+$showdescription = false;
+$assigned = false;
+$bugquery = "SELECT * FROM Bugs WHERE Status = 'Open'";
+$bugsql = $pdo->prepare($bugquery);
+$bugsql->execute();
+$bugs = $bugsql->fetchAll();
+$developerquery = "SELECT UserId, Name FROM Users WHERE Type = 'Developer'";
+$developersql = $pdo->prepare($developerquery);
+$developersql->execute();
+$developers = $developersql->fetchAll();
+if($_POST){
+    if($_POST['assign']){
+        $assignedBug = $bugs[$_POST['bug']]['BugId'];
+        $assignedDeveloper = $_POST['developer'];
+        $assignquery = "UPDATE Bugs SET AssignedTo = :developer, Status = 'Assigned' WHERE BugId = :bugid";
+        $assignsql = $pdo->prepare($assignquery);
+        $assignsql->bindValue("developer", $assignedDeveloper);
+        $assignsql->bindValue("bugid", $assignedBug);
+        $assignsql->execute();
+        $assigned = true;
+        $_POST = array();
+    }else if($_POST['description']){
+        $showdescription = true;
+    }else{
+        $error[] = "Your action could not be completed, please try again later";
+    }
+}
+
+?>
+<html>
+<head>
+<title> BSU BMS - Manager Portal</title>
+<style>
+.error {
+    color:red;
+} 
+
+h2 {
+    margin-top:-13px;
+} 
+
+table {
+    border: 1px solid black;
+}
+
+td {
+    border: 1px solid black;
+    text-align:center;
+}
+
+#description {
+    height:100;
+    width:170;
+}
+
+</style>
+<body>
+
+<h1>BSU Bug Management System</h1>
+<h2>Manager Portal</h2>
+
+<?php 
+echo "Welcome, $name!<br><br>";
+
+echo "<h3>Assign a bug</h3>";
+echo "<p>To view a bug's description, select only the bug and click Show Description.</p>";
+echo "<p>To assign a bug, select the bug and developer and click Assign Bug.</p><br>";
+
+if($bugs){
+    echo "<form action=\"\" method=\"post\">";
+    echo "<label>Bugs: </label><br>";
+    echo "<br><select name=\"bug\">";
+    $arrayIndex = 0;
+    foreach($bugs as $bug){
+        $bugid = $bug['BugId'];
+        echo "<option value=\"$arrayIndex\">Bug ID: $bugid</option>";
+        $arrayIndex++;
+    }
+    echo "</select><br><br>";
+    echo "<input type=\"submit\" value=\"Show Description\" name=\"description\"><br><br><br>";
+
+    if($showdescription){
+        $selectedIndex = $_POST['bug'];
+        $selectedBug = $bugs[$selectedIndex];
+        echo "<table cellpadding=\"5\">";
+        echo "<tr><th>Bug ID</th><th>Tester User ID</th><th>Subject</th><th>Priority</th><th>Description</th></tr>";
+        echo "<tr><td>".$selectedBug['BugId']."</td><td>".$selectedBug['EnteredBy']."</td><td>".$selectedBug['Subject']."</td><td>".$selectedBug['Priority']."</td><td id=\"description\">".$selectedBug['Description']."</td></tr>";
+        echo "</table><br><br>";
+    }
+    
+    echo "<label>Developers: </label><br><br>";
+    echo "<select name=\"developer\">";
+    foreach($developers as $developer){
+        $developerid = $developer['UserId'];
+        $developername = $developer['Name'];
+        echo "<option value=\"$developerid\">$developername</option>";
+    }
+    echo "</select><br><br><br>";
+    
+    echo "<input type=\"submit\" value=\"Assign Bug\" name=\"assign\">";
+    echo "</form>";
+    
+    if($assigned){
+        echo "<p>Bug assigned to developer successfully!</p>";
+    }
+}else{
+    echo "<p class=\"error\">No bugs available to be assigned right now</p>";
+}
+
+if($error){ 
+    foreach($error as $e){
+        echo "<p class=\"error\">Error: ".$e."</p>";
+    }
+}
+?>
+<p><a href="logout.php">Logout</a></p>
+</body>
+</head>
+</html>
+
+/*End of manager.php*/
+
+
+
+
+/*tester.php*/
+<?php
+if(!isset($_SESSION)){
+    session_start();
+}
+include_once 'connect.php';
+$error = array();
+if(!($_SESSION['userid'])){
+    header('Location: login.php');
+}
+if($_SESSION['type'] != 'Manager'){
+    unset($_SESSION['userid']);
+	header('Location: login.php');
+}
+$userid = $_SESSION['userid'];
+$name = $_SESSION['name'];
+$showdescription = false;
+$assigned = false;
+$bugquery = "SELECT * FROM Bugs WHERE Status = 'Open'";
+$bugsql = $pdo->prepare($bugquery);
+$bugsql->execute();
+$bugs = $bugsql->fetchAll();
+$developerquery = "SELECT UserId, Name FROM Users WHERE Type = 'Developer'";
+$developersql = $pdo->prepare($developerquery);
+$developersql->execute();
+$developers = $developersql->fetchAll();
+if($_POST){
+    if($_POST['assign']){
+        $assignedBug = $bugs[$_POST['bug']]['BugId'];
+        $assignedDeveloper = $_POST['developer'];
+        $assignquery = "UPDATE Bugs SET AssignedTo = :developer, Status = 'Assigned' WHERE BugId = :bugid";
+        $assignsql = $pdo->prepare($assignquery);
+        $assignsql->bindValue("developer", $assignedDeveloper);
+        $assignsql->bindValue("bugid", $assignedBug);
+        $assignsql->execute();
+        $assigned = true;
+        $_POST = array();
+    }else if($_POST['description']){
+        $showdescription = true;
+    }else{
+        $error[] = "Your action could not be completed, please try again later";
+    }
+}
+
+?>
+<html>
+<head>
+<title> BSU BMS - Manager Portal</title>
+<style>
+.error {
+    color:red;
+} 
+
+h2 {
+    margin-top:-13px;
+} 
+
+table {
+    border: 1px solid black;
+}
+
+td {
+    border: 1px solid black;
+    text-align:center;
+}
+
+#description {
+    height:100;
+    width:170;
+}
+
+</style>
+<body>
+
+<h1>BSU Bug Management System</h1>
+<h2>Manager Portal</h2>
+
+<?php 
+echo "Welcome, $name!<br><br>";
+
+echo "<h3>Assign a bug</h3>";
+echo "<p>To view a bug's description, select only the bug and click Show Description.</p>";
+echo "<p>To assign a bug, select the bug and developer and click Assign Bug.</p><br>";
+
+if($bugs){
+    echo "<form action=\"\" method=\"post\">";
+    echo "<label>Bugs: </label><br>";
+    echo "<br><select name=\"bug\">";
+    $arrayIndex = 0;
+    foreach($bugs as $bug){
+        $bugid = $bug['BugId'];
+        echo "<option value=\"$arrayIndex\">Bug ID: $bugid</option>";
+        $arrayIndex++;
+    }
+    echo "</select><br><br>";
+    echo "<input type=\"submit\" value=\"Show Description\" name=\"description\"><br><br><br>";
+
+    if($showdescription){
+        $selectedIndex = $_POST['bug'];
+        $selectedBug = $bugs[$selectedIndex];
+        echo "<table cellpadding=\"5\">";
+        echo "<tr><th>Bug ID</th><th>Tester User ID</th><th>Subject</th><th>Priority</th><th>Description</th></tr>";
+        echo "<tr><td>".$selectedBug['BugId']."</td><td>".$selectedBug['EnteredBy']."</td><td>".$selectedBug['Subject']."</td><td>".$selectedBug['Priority']."</td><td id=\"description\">".$selectedBug['Description']."</td></tr>";
+        echo "</table><br><br>";
+    }
+    
+    echo "<label>Developers: </label><br><br>";
+    echo "<select name=\"developer\">";
+    foreach($developers as $developer){
+        $developerid = $developer['UserId'];
+        $developername = $developer['Name'];
+        echo "<option value=\"$developerid\">$developername</option>";
+    }
+    echo "</select><br><br><br>";
+    
+    echo "<input type=\"submit\" value=\"Assign Bug\" name=\"assign\">";
+    echo "</form>";
+    
+    if($assigned){
+        echo "<p>Bug assigned to developer successfully!</p>";
+    }
+}else{
+    echo "<p class=\"error\">No bugs available to be assigned right now</p>";
+}
+
+if($error){ 
+    foreach($error as $e){
+        echo "<p class=\"error\">Error: ".$e."</p>";
+    }
+}
+?>
+<p><a href="logout.php">Logout</a></p>
+</body>
+</head>
+</html>
+
+/*End of tester.php*/
+
+/*End of project*/
+/**/
