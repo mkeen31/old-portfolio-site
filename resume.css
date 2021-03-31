@@ -27,8 +27,9 @@ body { font-family: Georgia; color: #444; }
 #bd, #ft { margin-bottom: 2em; }
 
 /* //-- footer -- */
+
 #ft { padding: 1em 0 5em 0; font-size: 92%; border-top: 1px solid #ccc; text-align: center; }
-#ft p { margin-bottom: 0; text-align: center;   }
+#ft p { margin-top: 5px; font-size: 15px; text-align: center;   }
 
 /* //-- core typography and style -- */
 #hd h1 { font-size: 48px; text-transform: uppercase; letter-spacing: 3px; }
@@ -58,7 +59,6 @@ a#pdf:hover { background: #222; }
 .job div img {padding-right: 5px;}
 
 .last { border: none; }
-.skills-list {  }
 .skills-list ul { margin: 0; }
 .skills-list li { margin: 3px 0; padding: 3px 0; }
 .skills-list li span { font-size: 152%; display: block; margin-bottom: -2px; padding: 0 }
@@ -71,5 +71,3 @@ a#pdf:hover { background: #222; }
 /* --// override to force 1/8th width grids -- */
 .yui-gf .yui-u{width:80.2%;}
 .yui-gf div.first{width:12.3%;}
-
-
